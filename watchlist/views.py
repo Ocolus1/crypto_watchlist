@@ -33,15 +33,18 @@ def get_transaction_history(address):
 def search_contract_interactions(request, contract_address):
     result_list = []
 
-    w3 = Web3(Web3.HTTPProvider(f'https://mainnet.infura.io/v3/{config("INFURA_APP_ID")}'))  # You need an Infura project ID
-    wallets = Wallet.objects.all()
+    # Initialize Web3 connection
+    w3 = Web3(Web3.HTTPProvider(f'https://mainnet.infura.io/v3/{settings.INFURA_APP_ID}'))
+    
+    # Fetch wallets tagged "Watchlist"
+    wallets = Wallet.objects.filter(tag="Watchlist")
 
     for wallet in wallets:
         has_interacted = False
-
-        # Fetch transaction history using Etherscan
-        transactions = get_transaction_history(wallet)
         
+        # Fetch transaction history (ensure this function's implementation)
+        transactions = get_transaction_history(wallet)
+
         for tx in transactions:
             if tx['to'].lower() == contract_address.lower():
                 has_interacted = True
@@ -54,29 +57,40 @@ def search_contract_interactions(request, contract_address):
     return Response(result_list)
 
 
-@api_view(['GET', 'POST'])
+@api_view(['GET', 'POST', 'PUT'])
 def add_wallet(request):
     if request.method == 'GET':
         wallets = Wallet.objects.all()
         serializer = WalletSerializer(wallets, many=True)
         return Response(serializer.data)
-    
-    if request.method == 'POST':
+
+    elif request.method == 'POST':
         wallet_address = request.data.get('address')
         
         if wallet_address:
-            # Check if wallet already exists
             if Wallet.objects.filter(address=wallet_address).exists():
                 return Response({'error': 'Wallet already exists'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Create new wallet entry
             wallet = Wallet(address=wallet_address)
             wallet.save()
-
             return Response({'message': 'Wallet added successfully'}, status=status.HTTP_201_CREATED)
         
         return Response({'error': 'Address is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+    elif request.method == 'PUT':
+        wallet_address = request.data.get('address')
+        tag = request.data.get('tag')
+        
+        if wallet_address:
+            try:
+                wallet = Wallet.objects.get(address=wallet_address)
+                wallet.tag = tag
+                wallet.save()
+                return Response({'message': 'Wallet tag updated successfully'}, status=status.HTTP_200_OK)
+            except Wallet.DoesNotExist:
+                return Response({'error': 'Wallet not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({'error': 'Address is required'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
 def wallet_list_delete(request, wallet_address=None):
