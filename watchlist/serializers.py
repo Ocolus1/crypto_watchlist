@@ -4,4 +4,4 @@ from .models import Wallet
 class WalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wallet
-        fields = ['address']  # Include fields you want serialized
+        fields = ['address', 'tag', 'date_added']  # Include fields you want serialized

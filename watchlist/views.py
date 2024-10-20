@@ -34,7 +34,7 @@ def search_contract_interactions(request, contract_address):
     result_list = []
 
     # Initialize Web3 connection
-    w3 = Web3(Web3.HTTPProvider(f'https://mainnet.infura.io/v3/{settings.INFURA_APP_ID}'))
+    w3 = Web3(Web3.HTTPProvider(f'https://mainnet.infura.io/v3/{config("INFURA_APP_ID")}'))
     
     # Fetch wallets tagged "Watchlist"
     wallets = Wallet.objects.filter(tag="Watchlist")
