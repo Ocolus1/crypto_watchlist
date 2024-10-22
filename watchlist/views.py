@@ -12,49 +12,60 @@ from decouple import config
 ETHERSCAN_API_KEY = config("ETHERSCAN_API_KEY")
 
 
-def get_transaction_history(address):
-    """
-    Uses Etherscan API to fetch transaction history for an Ethereum address.
-    """
-    url = f'https://api.etherscan.io/api?module=account&action=txlist&address={address}&sort=asc&apikey={ETHERSCAN_API_KEY}'
-    
-    response = requests.get(url)
-    data = response.json()
-    
-    if data['status'] == '1' and data['message'] == 'OK':
-        return data['result']
-    else:
-        print(f"Error fetching transactions: {data.get('message', 'Unknown error')}")
-        return []
+ERC20_ABI = '''
+[
+    {
+        "constant": true,
+        "inputs": [
+            {
+                "name": "_owner",
+                "type": "address"
+            }
+        ],
+        "name": "balanceOf",
+        "outputs": [
+            {
+                "name": "balance",
+                "type": "uint256"
+            }
+        ],
+        "type": "function"
+    }
+]
+'''
 
 
 
 @api_view(['GET'])
-def search_contract_interactions(request, contract_address):
+def check_token_holders(request, contract_address):
     result_list = []
 
-    # Initialize Web3 connection
-    w3 = Web3(Web3.HTTPProvider(f'https://mainnet.infura.io/v3/{config("INFURA_APP_ID")}'))
-    
-    # Fetch wallets tagged "Watchlist"
-    wallets = Wallet.objects.filter(tag="Watchlist")
+    try:
 
-    for wallet in wallets:
-        has_interacted = False
-        
-        # Fetch transaction history (ensure this function's implementation)
-        transactions = get_transaction_history(wallet)
+        # Initialize Web3 connection
+        w3 = Web3(Web3.HTTPProvider(f'https://mainnet.infura.io/v3/{config("INFURA_APP_ID")}'))
 
-        for tx in transactions:
-            if tx['to'].lower() == contract_address.lower():
-                has_interacted = True
-                break
+        # Create a contract instance for the token
+        token_contract = w3.eth.contract(address=Web3.to_checksum_address(contract_address), abi=ERC20_ABI)
 
-        serialized_wallet = WalletSerializer(wallet).data
-        serialized_wallet['hasInteracted'] = has_interacted
-        result_list.append(serialized_wallet)
+        # Fetch wallets tagged "Watchlist"
+        wallets = Wallet.objects.filter(tag="Watchlist")
 
-    return Response(result_list)
+        for wallet in wallets:
+            # Fetch the balance of the wallet for the given token
+            balance = token_contract.functions.balanceOf(wallet.address).call()
+
+            # Convert balance to a readable format (assuming the token has 18 decimals like most ERC-20 tokens)
+            token_balance = w3.from_wei(balance, 'ether')
+
+            serialized_wallet = WalletSerializer(wallet).data
+            serialized_wallet['tokenBalance'] = token_balance
+            serialized_wallet['hasToken'] = token_balance > 0
+            result_list.append(serialized_wallet)
+
+        return Response(result_list)
+    except:
+        return Response({'error': 'An error occured'}, status=status.HTTP_500_SERVER_ERROR)
 
 
 @api_view(['GET', 'POST', 'PUT'])
